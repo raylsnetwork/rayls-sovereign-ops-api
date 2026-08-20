@@ -1,0 +1,26 @@
+# IDEs
+.idea/
+.vscode/
+.DS_Store
+
+# Go debugging
+__debug_bin*
+debug.log
+
+# Build artifacts
+/build/
+
+# Configuration
+.env
+/tmp/*
+
+# Local dev (start_dev.sh) — one cache file per mode, seeded from remote.env.example.
+# Each holds that developer's deploy key plus machine-local state (deployed registry,
+# chain id, RayUp instance id). Never commit them.
+docker/development/remote.env
+docker/development/public-test.env
+docker/development/rayup.env
+docker/development/contracts-deploy.log
+
+# OAuth client secrets for local login
+.env.oauth

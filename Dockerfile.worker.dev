@@ -1,0 +1,18 @@
+FROM golang:1.26-alpine
+
+RUN apk add --no-cache curl bash
+
+ENV CGO_ENABLED=0
+
+RUN go install github.com/air-verse/air@v1.61.7
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# No in-image build: bind-mount shadows /app at runtime so this would be discarded.
+# `air` builds on startup into the persistent, shared go-build cache volume.
+CMD ["air", "-c", "air.worker.toml"]

@@ -1,0 +1,283 @@
+{
+  "info": {
+    "name": "Rayls Sovereign Ops API",
+    "_postman_id": "rayls-sovereign-ops-api",
+    "description": "Collection for the Rayls Sovereign Ops API (v1.4). Set the `baseUrl` variable to your server address (default: http://localhost:8080).\n\nAuth flow:\n1. Bootstrap the first admin via POST /admin/bootstrap\n2. Login via SIWE or OAuth\n3. On success, a JWT cookie is set and a `refresh_token` is returned in the body\n4. Use `POST /auth/refresh` to rotate the token pair",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string",
+      "description": "Refresh token received after successful authentication. Used to rotate the JWT."
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Returns the health status of the API."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bootstrap",
+      "item": [
+        {
+          "name": "Bootstrap Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/bootstrap",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "bootstrap"]
+            },
+            "description": "One-time endpoint to create the first admin user and provision an HSM wallet.\n\nReturns 201 with the wallet address on success.\nReturns 409 BOOTSTRAP_ALREADY_COMPLETED if any user already exists.\n\nProtected at the network/infra level — no auth required."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth - SIWE (Sign-In With Ethereum)",
+      "item": [
+        {
+          "name": "1. Get Login Challenge",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/siwe/login?address=0xYOUR_ETHEREUM_ADDRESS",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "siwe", "login"],
+              "query": [
+                {
+                  "key": "address",
+                  "value": "0xYOUR_ETHEREUM_ADDRESS",
+                  "description": "Valid Ethereum address (0x + 40 hex chars)"
+                }
+              ]
+            },
+            "description": "Step 1 of SIWE flow. Returns a nonce and a SIWE message (EIP-4361) to be signed by the wallet."
+          }
+        },
+        {
+          "name": "2. Verify Signature",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.refresh_token) {",
+                  "    pm.collectionVariables.set('refreshToken', json.refresh_token);",
+                  "}",
+                  "// JWT is set as a cookie — Postman captures it automatically.",
+                  "// To use it as a Bearer token in non-browser clients, read the JWT cookie value."
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"0xYOUR_ETHEREUM_ADDRESS\",\n  \"signature\": \"0xYOUR_SIGNATURE\",\n  \"nonce\": \"NONCE_FROM_STEP_1\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/siwe/auth",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "siwe", "auth"]
+            },
+            "description": "Step 2 of SIWE flow. Verifies the signed SIWE message.\n\nDecision tree (v1.4):\n- New wallet → auto-registers user → 403 WALLET_REGISTERED\n- Account suspended → 403 ACCOUNT_SUSPENDED\n- Awaiting role → 403 ROLE_ASSIGNMENT_PENDING\n- Role assigned + no on-chain roles → 403 ROLE_ASSIGNMENT_PENDING\n- Role assigned + has roles → 200 { status, refresh_token, user }\n\nOn success: JWT is set as a cookie, refresh_token is returned in the body."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Revokes the refresh token and clears the JWT cookie."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth - OAuth",
+      "item": [
+        {
+          "name": "Google Login (browser redirect)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/google/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "google", "login"]
+            },
+            "description": "Initiates the Google OAuth flow. Open this URL in a browser — it will redirect to Google's consent screen.\n\nRequires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to be configured.\n\nOn success: JWT cookie set + 200 { status, refresh_token, user }.\nOn pending role: 403 ROLE_ASSIGNMENT_PENDING. On an email already used by another provider: 409 EMAIL_ALREADY_LINKED."
+          }
+        },
+        {
+          "name": "Microsoft Login (browser redirect)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/microsoft/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "microsoft", "login"]
+            },
+            "description": "Initiates the Microsoft OAuth flow. Open this URL in a browser — it will redirect to Microsoft's consent screen.\n\nRequires MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET to be configured.\n\nOn success: JWT cookie set + 200 { status, refresh_token, user }.\nOn pending role: 403 ROLE_ASSIGNMENT_PENDING. On an email already used by another provider: 409 EMAIL_ALREADY_LINKED."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth - Token Management",
+      "item": [
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.refresh_token) {",
+                  "    pm.collectionVariables.set('refreshToken', json.refresh_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh"]
+            },
+            "description": "Validates the refresh token, checks user eligibility and on-chain roles, then rotates the token pair.\n\nReturns a new JWT (as cookie) and a new refresh_token (in body). The old refresh_token is blacklisted.\n\nErrors:\n- 401 INVALID_REFRESH_TOKEN — token invalid or expired\n- 401 TOKEN_REVOKED — token already used\n- 401 INVALID_USER_STATUS — account suspended\n- 401 NO_ACTIVE_ROLES — roles revoked on-chain\n- 503 SERVICE_UNAVAILABLE — blockchain RPC unavailable"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Revokes the refresh token and clears the JWT cookie. Safe to call even with an expired token."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get Current User (Me)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me"]
+            },
+            "description": "Returns the authenticated user's profile: id, name, email, picture, roles, and wallet address.\n\nRequires a valid JWT cookie and the PRIVACY_NODE_OPERATOR role.\n\nErrors:\n- 401 — missing or invalid JWT\n- 403 — authenticated but missing PRIVACY_NODE_OPERATOR role\n- 500 — failed to fetch user or wallet from DB"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Docs",
+      "item": [
+        {
+          "name": "Swagger UI",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/swagger/index.html",
+              "host": ["{{baseUrl}}"],
+              "path": ["swagger", "index.html"]
+            },
+            "description": "Opens the Swagger UI for interactive API documentation."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auth Test Page</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace; background: #0d1117; color: #c9d1d9; padding: 2rem; }
+    h1 { margin-bottom: 1.5rem; color: #58a6ff; }
+    h2 { margin: 1.5rem 0 0.75rem; color: #8b949e; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+
+    button {
+      padding: 0.6rem 1.2rem; border: 1px solid #30363d; border-radius: 6px;
+      background: #21262d; color: #c9d1d9; cursor: pointer; font-size: 0.9rem;
+      margin-right: 0.5rem; margin-bottom: 0.5rem; transition: background 0.15s;
+    }
+    button:hover { background: #30363d; }
+    button.primary { background: #238636; border-color: #2ea043; color: #fff; }
+    button.primary:hover { background: #2ea043; }
+    button.danger { background: #da3633; border-color: #f85149; color: #fff; }
+    button.danger:hover { background: #f85149; }
+
+    input {
+      padding: 0.5rem 0.75rem; border: 1px solid #30363d; border-radius: 6px;
+      background: #0d1117; color: #c9d1d9; font-size: 0.9rem; width: 300px;
+      margin-right: 0.5rem; margin-bottom: 0.5rem;
+    }
+    input::placeholder { color: #484f58; }
+
+    #log {
+      background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+      padding: 1rem; max-height: 400px; overflow-y: auto; font-size: 0.8rem;
+      line-height: 1.6; white-space: pre-wrap; word-break: break-all;
+    }
+    .log-info { color: #58a6ff; }
+    .log-ok { color: #3fb950; }
+    .log-err { color: #f85149; }
+    .log-data { color: #d2a8ff; }
+    .log-time { color: #484f58; }
+
+    .status { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+    .status.authed { background: #0d4429; color: #3fb950; }
+    .status.unauthed { background: #3d1f1f; color: #f85149; }
+
+    .hidden { display: none; }
+    .row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <h1>Auth Test Page</h1>
+
+  <!-- Status -->
+  <div class="card">
+    <div class="row">
+      <span id="authStatus" class="status unauthed">Not authenticated</span>
+      <button onclick="checkAuth()">Check Auth</button>
+      <button class="danger" onclick="doLogout()">Logout</button>
+    </div>
+    <div id="userInfo" class="hidden" style="margin-top: 0.75rem; font-size: 0.85rem; color: #8b949e;"></div>
+  </div>
+
+  <!-- OAuth -->
+  <h2>Google / Microsoft OAuth</h2>
+  <div class="card">
+    <button class="primary" onclick="oauthLogin('google')">Sign in with Google</button>
+    <button class="primary" onclick="oauthLogin('microsoft')">Sign in with Microsoft</button>
+  </div>
+
+  <!-- SIWE -->
+  <h2>SIWE (MetaMask)</h2>
+  <div class="card">
+    <div style="margin-bottom: 0.75rem;">
+      <button class="primary" onclick="connectWallet()">1. Connect Wallet</button>
+      <span id="walletAddr" style="color: #8b949e; font-size: 0.85rem;"></span>
+    </div>
+    <div style="margin-bottom: 0.75rem;">
+      <button onclick="siweChallenge()">2. Get Challenge</button>
+      <button onclick="siweSign()">3. Sign & Verify</button>
+    </div>
+    <div id="regSection" class="hidden">
+      <hr style="border-color: #30363d; margin: 0.75rem 0;">
+      <p style="color: #d29922; font-size: 0.85rem; margin-bottom: 0.5rem;">New wallet — complete registration:</p>
+      <div class="row">
+        <input id="regName" placeholder="Name (optional)" />
+        <input id="regEmail" placeholder="Email (optional)" type="email" />
+        <button class="primary" onclick="siweRegister()">Register</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <h2>Request Log</h2>
+  <div class="card">
+    <button onclick="clearLog()" style="margin-bottom: 0.5rem;">Clear</button>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    const BASE = '';
+    let siweState = {};
+
+    function ts() {
+      return new Date().toLocaleTimeString('en-GB');
+    }
+
+    function log(msg, cls = 'info') {
+      const el = document.getElementById('log');
+      el.innerHTML += `<span class="log-time">[${ts()}]</span> <span class="log-${cls}">${escapeHtml(msg)}</span>\n`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function logJson(label, data) {
+      log(`${label}:`, 'info');
+      log(JSON.stringify(data, null, 2), 'data');
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    // ---------- Auth status ----------
+
+    async function checkAuth() {
+      log('GET /auth/user');
+      try {
+        const res = await fetch(`${BASE}/auth/user`, { credentials: 'include' });
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('authStatus').className = 'status authed';
+          document.getElementById('authStatus').textContent = 'Authenticated';
+          document.getElementById('userInfo').classList.remove('hidden');
+          document.getElementById('userInfo').textContent = `Name: ${data.name || '—'}  |  Email: ${data.email || '—'}  |  ID: ${data.id || '—'}`;
+          logJson('Authenticated', data);
+        } else {
+          document.getElementById('authStatus').className = 'status unauthed';
+          document.getElementById('authStatus').textContent = 'Not authenticated';
+          document.getElementById('userInfo').classList.add('hidden');
+          log(`Not authenticated (${res.status})`, 'err');
+        }
+      } catch (e) {
+        log(`Error: ${e.message}`, 'err');
+      }
+    }
+
+    // ---------- OAuth ----------
+
+    function oauthLogin(provider) {
+      log(`Redirecting to /auth/${provider}/login`);
+      const from = encodeURIComponent(window.location.origin + '/test');
+      window.location.href = `${BASE}/auth/${provider}/login?from=${from}`;
+    }
+
+    // ---------- Logout ----------
+
+    async function doLogout() {
+      log('GET /auth/logout');
+      try {
+        const res = await fetch(`${BASE}/auth/logout`, { credentials: 'include' });
+        log(`Logout response: ${res.status}`, res.ok ? 'ok' : 'err');
+        document.getElementById('authStatus').className = 'status unauthed';
+        document.getElementById('authStatus').textContent = 'Not authenticated';
+        document.getElementById('userInfo').classList.add('hidden');
+        document.getElementById('regSection').classList.add('hidden');
+        siweState = {};
+      } catch (e) {
+        log(`Error: ${e.message}`, 'err');
+      }
+    }
+
+    // ---------- SIWE ----------
+
+    async function connectWallet() {
+      if (typeof window.ethereum === 'undefined') {
+        log('MetaMask not detected — install it first', 'err');
+        return;
+      }
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        siweState.address = accounts[0];
+        document.getElementById('walletAddr').textContent = siweState.address;
+        log(`Wallet connected: ${siweState.address}`, 'ok');
+      } catch (e) {
+        log(`Wallet connection failed: ${e.message}`, 'err');
+      }
+    }
+
+    async function siweChallenge() {
+      if (!siweState.address) {
+        log('Connect wallet first', 'err');
+        return;
+      }
+      log(`GET /auth/siwe/login?address=${siweState.address}`);
+      try {
+        const res = await fetch(`${BASE}/auth/siwe/login?address=${siweState.address}`, { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) {
+          log(`Challenge failed: ${JSON.stringify(data)}`, 'err');
+          return;
+        }
+        siweState.message = data.message;
+        siweState.nonce = data.nonce;
+        logJson('Challenge received', data);
+      } catch (e) {
+        log(`Error: ${e.message}`, 'err');
+      }
+    }
+
+    async function siweSign() {
+      if (!siweState.message) {
+        log('Get challenge first', 'err');
+        return;
+      }
+      try {
+        log('Requesting MetaMask signature...');
+        const signature = await window.ethereum.request({
+          method: 'personal_sign',
+          params: [siweState.message, siweState.address],
+        });
+        siweState.signature = signature;
+        log(`Signature: ${signature.slice(0, 20)}...`, 'ok');
+
+        log('POST /auth/siwe/callback');
+        const res = await fetch(`${BASE}/auth/siwe/callback`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address: siweState.address,
+            signature: siweState.signature,
+            nonce: siweState.nonce,
+          }),
+        });
+        const data = await res.json();
+        logJson('Verify response', data);
+
+        if (data.status === 'registration_required') {
+          siweState.registrationToken = data.registrationToken;
+          document.getElementById('regSection').classList.remove('hidden');
+          log('New wallet detected — complete registration below', 'info');
+        } else if (data.status === 'authenticated') {
+          log('Authenticated!', 'ok');
+          checkAuth();
+        } else {
+          log(`Unexpected status: ${data.status}`, 'err');
+        }
+      } catch (e) {
+        log(`Error: ${e.message}`, 'err');
+      }
+    }
+
+    async function siweRegister() {
+      const name = document.getElementById('regName').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      log('POST /auth/register/siwe');
+      try {
+        const res = await fetch(`${BASE}/auth/register/siwe`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${siweState.registrationToken}`,
+          },
+          body: JSON.stringify({ name, email }),
+        });
+        const data = await res.json();
+        logJson('Register response', data);
+        if (data.status === 'registered') {
+          log('Registered and authenticated!', 'ok');
+          document.getElementById('regSection').classList.add('hidden');
+          checkAuth();
+        }
+      } catch (e) {
+        log(`Error: ${e.message}`, 'err');
+      }
+    }
+
+    // Auto-check auth on load
+    checkAuth();
+  </script>
+</body>
+</html>

@@ -1,0 +1,2030 @@
+definitions:
+  cmd_api_adapters_handlers.addressPairResponse:
+    properties:
+      created_at:
+        type: string
+      private_chain_address:
+        type: string
+      public_chain_address:
+        type: string
+      status:
+        type: integer
+    type: object
+  cmd_api_adapters_handlers.bootstrapRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  cmd_api_adapters_handlers.burnRequest:
+    properties:
+      amount:
+        type: string
+      from:
+        type: string
+      tokenId:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.deployTokenRequest:
+    properties:
+      decimals:
+        type: integer
+      name:
+        type: string
+      standard:
+        type: string
+      symbol:
+        type: string
+      uri:
+        type: string
+    required:
+    - standard
+    type: object
+  cmd_api_adapters_handlers.deployTokenResponse:
+    properties:
+      deployedAddress:
+        type: string
+      standard:
+        type: string
+      txHash:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.freezeRequest:
+    properties:
+      layer:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.meResponse:
+    properties:
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      picture:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      wallet_address:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.mintRequest:
+    properties:
+      amount:
+        type: string
+      data:
+        type: string
+      to:
+        type: string
+      tokenId:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.pauseRequest:
+    properties:
+      paused:
+        type: boolean
+    type: object
+  cmd_api_adapters_handlers.pendingUserAddressPairsResponse:
+    properties:
+      address_pairs:
+        items:
+          $ref: '#/definitions/cmd_api_adapters_handlers.addressPairResponse'
+        type: array
+      user_id:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.refreshRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  cmd_api_adapters_handlers.registeredTokenResponse:
+    properties:
+      address:
+        type: string
+      name:
+        type: string
+      standard:
+        type: integer
+      status:
+        type: integer
+      symbol:
+        type: string
+      updated_at:
+        type: string
+      uri:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.setApprovalStatusRequest:
+    properties:
+      private_address:
+        type: string
+      public_address:
+        type: string
+      status:
+        type: integer
+    type: object
+  cmd_api_adapters_handlers.setTokenStatusRequest:
+    properties:
+      status:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.siweVerifyRequest:
+    properties:
+      address:
+        example: 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
+        type: string
+      nonce:
+        example: abc123xyz
+        type: string
+      signature:
+        example: 0xabc123...
+        type: string
+    type: object
+  cmd_api_adapters_handlers.submitRequest:
+    properties:
+      target:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.teleportRequest:
+    properties:
+      amount:
+        type: string
+      data:
+        type: string
+      from:
+        type: string
+      standard:
+        type: integer
+      to:
+        type: string
+      tokenId:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.teleportResponse:
+    properties:
+      tx_hash:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.tokenListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/cmd_api_adapters_handlers.tokenResponse'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  cmd_api_adapters_handlers.tokenResponse:
+    properties:
+      contractAddress:
+        type: string
+      decimals:
+        type: integer
+      ercStandard:
+        type: integer
+      ercStandardLabel:
+        type: string
+      holderCount:
+        type: integer
+      id:
+        type: string
+      issuerId:
+        type: string
+      metadataUrl:
+        type: string
+      name:
+        type: string
+      status:
+        type: integer
+      statusLabel:
+        type: string
+      symbol:
+        type: string
+      tokenClass:
+        type: string
+      totalSupply:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.txResponse:
+    properties:
+      txHash:
+        type: string
+    type: object
+  cmd_api_adapters_handlers.walletBalanceResponse:
+    properties:
+      balance:
+        type: string
+      blockNumber:
+        type: integer
+      decimals:
+        type: integer
+      tokenAddress:
+        type: string
+      tokenName:
+        type: string
+      tokenSymbol:
+        type: string
+      updatedAt:
+        type: string
+      walletAddress:
+        type: string
+    type: object
+  ops-api_cmd_api_core.TokenDeployEstimate:
+    properties:
+      gasLimit:
+        type: integer
+      gasPriceWei:
+        type: string
+      totalFeeWei:
+        description: gasLimit * gasPriceWei
+        type: string
+    type: object
+  ops-api_cmd_api_core.TokenFunction:
+    properties:
+      name:
+        description: friendly name (mint/burn/...), empty if unknown
+        type: string
+      selector:
+        description: 4-byte selector, e.g. "0x40c10f19"
+        type: string
+    type: object
+  ops-api_cmd_api_core.TokenPermissions:
+    properties:
+      canBurn:
+        type: boolean
+      canMint:
+        type: boolean
+      canPause:
+        description: |-
+          CanPause reports whether this wallet is the stablecoin's `pauser`. Deliberately not
+          derived from AM roles: pause()/unpause() are gated on a msg.sender equality check
+          against the contract's own `pauser` address. False for non-stablecoins, which have no
+          pause function at all.
+        type: boolean
+      canSubmitTokenUpdate:
+        type: boolean
+      contractAddress:
+        type: string
+      functions:
+        items:
+          $ref: '#/definitions/ops-api_cmd_api_core.TokenFunction'
+        type: array
+      isPaused:
+        description: |-
+          IsPaused is the ACCESS MANAGER's pause on this managed contract (mirrored from its
+          ContractPauseUpdated events) — NOT the stablecoin's own `paused` state variable.
+        type: boolean
+      isTokenPaused:
+        description: |-
+          IsTokenPaused is the stablecoin's OWN `paused` flag, read live from the contract — the
+          one that actually halts transfers. Distinct from IsPaused above; false for standards
+          with no pause function.
+        type: boolean
+      walletAddress:
+        type: string
+    type: object
+  ops-api_cmd_api_utils.ErrorResponse:
+    properties:
+      error:
+        type: string
+      hint:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /admin/bootstrap:
+    post:
+      consumes:
+      - application/json
+      description: One-time endpoint that creates the initial admin user with an HSM
+        wallet. Returns the wallet address for on-chain role assignment. Returns 409
+        if any user already exists.
+      parameters:
+      - description: Admin email
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.bootstrapRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Bootstrap admin
+      tags:
+      - admin
+  /api/me:
+    get:
+      description: Returns profile information for the authenticated PRIVACY_NODE_OPERATOR.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cmd_api_adapters_handlers.meResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get current user
+      tags:
+      - users
+  /api/me/address-pairs:
+    get:
+      description: |-
+        Returns the authenticated user's on-chain address pairs from RNUserGovernance, derived
+        from the JWT (keccak256 of the user ID). Omitting the status filter returns all pairs;
+        status=0 returns only pending pairs.
+      parameters:
+      - description: Filter by approval status
+        enum:
+        - 0
+        in: query
+        name: status
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/cmd_api_adapters_handlers.addressPairResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List own address pairs
+      tags:
+      - onboarding
+    post:
+      description: |-
+        Creates a fresh HSM wallet pair (private + public chain) and registers it on-chain in
+        RNUserGovernance as a pending pair. The on-chain write is operator-signed. Takes no body;
+        each call creates a new pair, so a user accumulates many pairs over repeated calls.
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/cmd_api_adapters_handlers.addressPairResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Add an address pair
+      tags:
+      - onboarding
+  /api/tokens:
+    get:
+      description: Returns a paginated list of tokens discovered by the indexer. Supports
+        filtering by name, symbol and ERC type.
+      parameters:
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Items per page (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by token name (case-insensitive, partial match)
+        in: query
+        name: name
+        type: string
+      - description: Filter by token symbol (case-insensitive, partial match)
+        in: query
+        name: symbol
+        type: string
+      - description: Filter by ERC standard (canonical labels)
+        enum:
+        - RAYLS_ERC20
+        - RAYLS_ERC721
+        - RAYLS_ERC1155
+        - RAYLS_ENYGMA
+        - RAYLS_ERC721_DVP
+        - RAYLS_ERC1155_DVP
+        - RAYLS_STABLECOIN
+        in: query
+        name: type
+        type: string
+      - description: Filter by the chain the token was deployed on (chainId)
+        in: query
+        name: issuerId
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cmd_api_adapters_handlers.tokenListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List tokens
+      tags:
+      - tokens
+    post:
+      consumes:
+      - application/json
+      description: Deploys a token via RNContractFactory, signed with the authenticated
+        user's custody wallet.
+      parameters:
+      - description: Token to deploy
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.deployTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/cmd_api_adapters_handlers.deployTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Deploy a protocol token
+      tags:
+      - tokens
+  /api/tokens/{address}:
+    get:
+      description: Returns the token identified by its contract address (case-insensitive).
+      parameters:
+      - description: Token contract address (0x...)
+        in: path
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cmd_api_adapters_handlers.tokenResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get token details
+      tags:
+      - tokens
+  /api/tokens/{address}/burn:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Burns tokens on the token contract, signed with the authenticated user's custody wallet.
+        Requires the burn permission. Body fields depend on standard: fungible uses {from,amount};
+        ERC721 uses {tokenId}; ERC1155 uses {from,tokenId,amount}.
+      parameters:
+      - description: Token contract address
+        in: path
+        name: address
+        required: true
+        type: string
+      - description: Burn parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.burnRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cmd_api_adapters_handlers.txResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+      summary: Burn tokens
+      tags:
+      - tokens
+  /api/tokens/{address}/mint:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Mints tokens on the token contract, signed with the authenticated user's custody wallet.
+        Requires the user's wallet to hold the mint permission (Access Manager). Body fields depend
+        on the token standard: fungible uses {to,amount}; ERC721 uses {to,tokenId}; ERC1155 uses {to,tokenId,amount,data}.
+      parameters:
+      - description: Token contract address
+        in: path
+        name: address
+        required: true
+        type: string
+      - description: Mint parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.mintRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cmd_api_adapters_handlers.txResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+      summary: Mint tokens
+      tags:
+      - tokens
+  /api/tokens/{address}/pause:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Calls pause() or unpause() on the token contract, signed with the authenticated
+        user's custody wallet. Stablecoin only (RAYLS_STABLECOIN): other standards have no
+        pause function. Authorization is NOT an Access Manager role — the contract accepts
+        only its own `pauser` address, so the caller's wallet must equal it.
+      parameters:
+      - description: Token contract address
+        in: path
+        name: address
+        required: true
+        type: string
+      - description: Desired paused state
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.pauseRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cmd_api_adapters_handlers.txResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+      summary: Pause or unpause a stablecoin
+      tags:
+      - tokens
+  /api/tokens/{address}/permissions:
+    get:
+      description: |-
+        Returns, for the authenticated user's custody wallet, which Access Manager-gated
+        functions (mint/burn/...) it can call on the token, plus convenience flags.
+      parameters:
+      - description: Token contract address (0x...)
+        in: path
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_core.TokenPermissions'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get token permissions for the current user
+      tags:
+      - tokens
+  /api/tokens/{address}/register:
+    post:
+      description: |-
+        Adds an already-deployed token contract (at the path :address) to the on-chain
+        TokenRegistry catalog. Registration is address-only — the contract reads the token's
+        name/symbol/standard/supply on-chain, so no request body is needed. The contract must
+        have deployed code (EOAs and empty addresses are rejected). The on-chain write is
+        operator-signed; the token starts in WAITING_APPROVAL status (privacyNodeStatus 1).
+        This does not deploy a token — that remains POST /api/tokens.
+      parameters:
+      - description: Deployed token contract address
+        in: path
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/cmd_api_adapters_handlers.registeredTokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register a token
+      tags:
+      - tokens
+  /api/tokens/{address}/teleport:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Calls teleportToPublicChain on the token contract, signed with the authenticated user's
+        custody wallet, after a mandatory preflight (token registered & active, caller balance/ownership).
+        Supports only ERC20, ERC721 and ERC1155. Body fields depend on the standard: ERC20 uses
+        {to,amount}; ERC721 uses {to,tokenId}; ERC1155 uses {to,tokenId,amount,data}. amount is in
+        base units. {from} is required and selects which of the caller's wallets signs (msg.sender);
+        it must be one of the caller's active private-chain custody wallets.
+      parameters:
+      - description: Token contract address
+        in: path
+        name: address
+        required: true
+        type: string
+      - description: Teleport parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.teleportRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cmd_api_adapters_handlers.teleportResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+      summary: Teleport tokens to the public chain
+      tags:
+      - tokens
+  /api/tokens/estimate:
+    post:
+      consumes:
+      - application/json
+      description: Returns the real gas estimate (eth_estimateGas + gas price) for
+        deploying a token via RNContractFactory, signed by the authenticated user's
+        custody wallet. Does not deploy.
+      parameters:
+      - description: Token to estimate
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.deployTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_core.TokenDeployEstimate'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "502":
+          description: Bad Gateway
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Estimate token deploy gas
+      tags:
+      - tokens
+  /api/tokens/registry:
+    get:
+      description: |-
+        Returns all tokens in the on-chain TokenRegistry catalog. This is the registry
+        catalog (read from-chain), distinct from GET /api/tokens, which lists indexer-discovered
+        tokens. No query parameters are accepted.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/cmd_api_adapters_handlers.registeredTokenResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List registered tokens
+      tags:
+      - tokens
+  /api/tokens/registry/pending:
+    get:
+      description: |-
+        Returns only the pending tokens in the on-chain TokenRegistry catalog — those in the
+        WAITING_APPROVAL status (privacyNodeStatus 1), i.e. registered but not yet approved by
+        an operator. No query parameters are accepted.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/cmd_api_adapters_handlers.registeredTokenResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List pending registered tokens
+      tags:
+      - tokens
+  /api/tokens/stream:
+    get:
+      description: |-
+        Server-Sent Events stream of curated token lifecycle events. Each message is
+        `event: token` with a JSON `data` payload `{type,address,status,...}`. Authenticated
+        via the session cookie — connect with `new EventSource(url, { withCredentials: true })`.
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: event stream
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Stream token updates (SSE)
+      tags:
+      - tokens
+  /api/v1/admin/accounts/{address}/roles:
+    get:
+      parameters:
+      - description: Wallet address (0x...)
+        in: path
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List roles for a wallet address
+      tags:
+      - access-manager
+  /api/v1/admin/address-pairs/pending:
+    get:
+      description: |-
+        Returns every pending address pair across all users, read on-chain via
+        getAllPendingAddressPairs and grouped under the resolved ops-api user UUID. Hashes that
+        do not resolve to a known user are skipped. Requires the PRIVACY_NODE_OPERATOR role.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/cmd_api_adapters_handlers.pendingUserAddressPairsResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List all pending address pairs (operator)
+      tags:
+      - onboarding
+  /api/v1/admin/events:
+    get:
+      parameters:
+      - description: Filter by event name (e.g. RoleGranted)
+        in: query
+        name: event
+        type: string
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Items per page (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List access manager events
+      tags:
+      - access-manager
+  /api/v1/admin/managed-contracts:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List managed contracts
+      tags:
+      - access-manager
+  /api/v1/admin/managed-contracts/{address}:
+    get:
+      parameters:
+      - description: Contract address (0x...)
+        in: path
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get managed contract
+      tags:
+      - access-manager
+  /api/v1/admin/managed-contracts/{address}/permissions:
+    get:
+      parameters:
+      - description: Contract address (0x...)
+        in: path
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List function permissions
+      tags:
+      - access-manager
+  /api/v1/admin/roles:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List access manager roles
+      tags:
+      - access-manager
+  /api/v1/admin/roles/{roleId}:
+    get:
+      parameters:
+      - description: Role ID
+        in: path
+        name: roleId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get role by ID
+      tags:
+      - access-manager
+  /api/v1/admin/roles/{roleId}/members:
+    get:
+      parameters:
+      - description: Role ID
+        in: path
+        name: roleId
+        required: true
+        type: integer
+      - description: Filter active-only members (default true)
+        in: query
+        name: active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List role members
+      tags:
+      - access-manager
+  /api/v1/admin/scheduled-operations:
+    get:
+      parameters:
+      - description: 'Filter by status: scheduled, executed, canceled'
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List scheduled operations
+      tags:
+      - access-manager
+  /api/v1/admin/tokens/{address}/freeze:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Freezes a registered token by submitting an operator-signed freeze to the TokenRegistry.
+        The token address is taken from the path :address, never the body. The layer is one of
+        "privacy_node" (freezeOnPrivacyNode — blocks all operations) or "public_chain"
+        (freezeOnPublicChain — blocks public chain operations only). The Hub (PNH) layer is not
+        supported here — hub freezing is a cross-chain operation owned by the Private Hub.
+        Requires the PRIVACY_NODE_OPERATOR role. Returns 200 with no body.
+      parameters:
+      - description: Registered token contract address
+        in: path
+        name: address
+        required: true
+        type: string
+      - description: Target freeze layer (privacy_node or public_chain)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.freezeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Freeze a registered token at a layer (operator)
+      tags:
+      - tokens
+  /api/v1/admin/tokens/{address}/status:
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        Moves a registered token through the PN lifecycle by submitting an operator-signed
+        updatePrivacyNodeStatus to the TokenRegistry. The token address is taken from the path
+        :address, never the body. Allowed statuses are "authorized" and "unauthorized";
+        "undefined", "waiting_approval" (the initial state set by registration) and
+        "frozen" are rejected. Freezing/unfreezing has dedicated contract methods
+        (freezeOnPrivacyNode/unfreezeOnPrivacyNode) exposed via the freeze/unfreeze endpoints.
+        Requires the PRIVACY_NODE_OPERATOR role. Returns 200 with no body.
+      parameters:
+      - description: Registered token contract address
+        in: path
+        name: address
+        required: true
+        type: string
+      - description: New privacyNodeStatus (\
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.setTokenStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Set a registered token's privacy-node status (operator)
+      tags:
+      - tokens
+  /api/v1/admin/tokens/{address}/submit:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Submits an AUTHORIZED token to another layer by submitting an operator-signed
+        submitToHub / submitToPublicChain to the TokenRegistry. The token address is taken from
+        the path :address, never the body. The target is one of "hub" (submitToHub — sends
+        addToken() to the Private Hub and moves hubStatus to WAITING_APPROVAL) or "public_chain"
+        (submitToPublicChain — moves publicChainStatus to PENDING_DEPLOYMENT). Submitting only
+        initiates the flow; activation on the Hub and deployment on the Public Chain complete
+        later via cross-chain PNH / relayer callbacks. Requires privacyNodeStatus == AUTHORIZED
+        (enforced on-chain; a token not yet authorized reverts as 422) and the
+        PRIVACY_NODE_OPERATOR role. Returns 200 with no body.
+      parameters:
+      - description: Registered token contract address
+        in: path
+        name: address
+        required: true
+        type: string
+      - description: Target layer (hub or public_chain)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.submitRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Submit a registered token to the Hub or Public Chain (operator)
+      tags:
+      - tokens
+  /api/v1/admin/tokens/{address}/unfreeze:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Unfreezes a registered token by submitting an operator-signed unfreeze to the
+        TokenRegistry. The token address is taken from the path :address, never the body. The
+        layer is one of "privacy_node" (unfreezeOnPrivacyNode) or "public_chain"
+        (unfreezeOnPublicChain). The Hub (PNH) layer is not supported here. Requires the
+        PRIVACY_NODE_OPERATOR role. Returns 200 with no body.
+      parameters:
+      - description: Registered token contract address
+        in: path
+        name: address
+        required: true
+        type: string
+      - description: Target freeze layer (privacy_node or public_chain)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.freezeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ops-api_cmd_api_utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Unfreeze a registered token at a layer (operator)
+      tags:
+      - tokens
+  /api/v1/admin/users/{id}/address-pairs/status:
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        Sets an address pair's approval status: 0 (pending), 1 (approved), or 2 (rejected). This
+        includes reverting an already-decided pair back to pending. The target user is taken from
+        the path :id, never the body; the on-chain write is operator-signed.
+        Requires the PRIVACY_NODE_OPERATOR role.
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Approval decision
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.setApprovalStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Set address pair approval status (operator)
+      tags:
+      - onboarding
+  /api/wallets/{address}/balances:
+    get:
+      description: Returns the current per-token balances for a wallet, sourced from
+        Blockscout via the balances indexer.
+      parameters:
+      - description: Wallet address (0x...)
+        in: path
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/cmd_api_adapters_handlers.walletBalanceResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List wallet balances
+      tags:
+      - wallets
+  /api/wallets/{address}/balances/{tokenAddress}:
+    get:
+      description: Returns the current balance for a single token in a wallet, sourced
+        from Blockscout via the balances indexer.
+      parameters:
+      - description: Wallet address (0x...)
+        in: path
+        name: address
+        required: true
+        type: string
+      - description: Token contract address (0x...)
+        in: path
+        name: tokenAddress
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cmd_api_adapters_handlers.walletBalanceResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a single wallet balance
+      tags:
+      - wallets
+  /api/wallets/balances/stream:
+    get:
+      description: |-
+        Server-Sent Events stream of curated wallet balance events. Each message is
+        `event: wallet_balance` with a JSON `data` payload `{type,walletAddress,tokenAddress,balance,blockNumber}`.
+        Authenticated via the session cookie — connect with `new EventSource(url, { withCredentials: true })`.
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: event stream
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Stream wallet balance updates (SSE)
+      tags:
+      - wallets
+  /auth/google/callback:
+    get:
+      description: Handles the OAuth callback from Google. Issues JWT cookie + refresh
+        token, or returns 403 if approval pending.
+      parameters:
+      - description: Authorization code from Google
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: CSRF state
+        in: query
+        name: state
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: authenticated
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: INVALID_CREDENTIAL
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: ROLE_ASSIGNMENT_PENDING, WALLET_REGISTERED or ACCOUNT_SUSPENDED
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: EMAIL_ALREADY_LINKED
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: SERVICE_UNAVAILABLE
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Google OAuth callback
+      tags:
+      - auth
+  /auth/google/login:
+    get:
+      description: Redirects the user to Google's OAuth consent page. On success redirects
+        to callback.
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect to Google
+          schema:
+            type: string
+      summary: Google OAuth login
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Revokes the refresh token and clears the auth cookie.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.refreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Logout
+      tags:
+      - auth
+  /auth/microsoft/callback:
+    get:
+      description: Handles the OAuth callback from Microsoft. Issues JWT cookie +
+        refresh token, or returns 403 if approval pending.
+      parameters:
+      - description: Authorization code from Microsoft
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: CSRF state
+        in: query
+        name: state
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: authenticated
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: INVALID_CREDENTIAL
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: ROLE_ASSIGNMENT_PENDING, WALLET_REGISTERED or ACCOUNT_SUSPENDED
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: EMAIL_ALREADY_LINKED
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Microsoft OAuth callback
+      tags:
+      - auth
+  /auth/microsoft/login:
+    get:
+      description: Redirects the user to Microsoft's OAuth consent page.
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect to Microsoft
+          schema:
+            type: string
+      summary: Microsoft OAuth login
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Validates the refresh token, checks user eligibility, rotates the
+        token pair.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.refreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Refresh token
+      tags:
+      - auth
+  /auth/siwe/callback:
+    post:
+      consumes:
+      - application/json
+      description: Verifies the signed SIWE message. Auto-registers new wallets and
+        applies the v1.4 decision tree. Issues JWT cookie + refresh_token on success,
+        or returns 403/503 based on account state.
+      parameters:
+      - description: Signed SIWE payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/cmd_api_adapters_handlers.siweVerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: authenticated with refresh_token
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: INVALID_CREDENTIAL
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: ROLE_ASSIGNMENT_PENDING, WALLET_REGISTERED or ACCOUNT_SUSPENDED
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: EMAIL_ALREADY_LINKED
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: SERVICE_UNAVAILABLE
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: SIWE verify signature
+      tags:
+      - auth
+  /auth/siwe/login:
+    get:
+      description: Generates a Sign-In with Ethereum challenge (EIP-4361 message +
+        nonce) for the given wallet address.
+      parameters:
+      - description: Ethereum wallet address (0x + 40 hex chars)
+        in: query
+        name: address
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message and nonce
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: SIWE challenge
+      tags:
+      - auth
+  /health:
+    get:
+      description: Returns OK if the service is running
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - health
+swagger: "2.0"

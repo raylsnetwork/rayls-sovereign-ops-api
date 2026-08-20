@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS token_events;
+DROP TABLE IF EXISTS indexer_state;
+DROP TABLE IF EXISTS tokens;

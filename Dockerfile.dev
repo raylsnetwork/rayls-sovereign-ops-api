@@ -1,0 +1,22 @@
+FROM golang:1.26-alpine
+
+RUN apk add --no-cache curl bash
+
+ENV CGO_ENABLED=0
+
+RUN go install github.com/air-verse/air@v1.61.7 && \
+    go install github.com/go-delve/delve/cmd/dlv@latest && \
+    go install github.com/swaggo/swag/cmd/swag@latest
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# No in-image build: the compose bind-mount (.:/app) shadows /app at runtime, so any
+# binary/docs built here would be discarded. `air` builds once on startup into the
+# persistent go-build cache volume (see docker-compose.dev-remote.yml). This keeps the
+# image build fast and avoids recompiling the (large) go-ethereum tree twice.
+CMD ["air", "-c", "air.toml"]

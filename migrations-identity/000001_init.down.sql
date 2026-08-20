@@ -1,0 +1,6 @@
+DROP TABLE IF EXISTS token_blacklist;
+DROP TABLE IF EXISTS nonces;
+DROP TABLE IF EXISTS user_signup_details;
+DROP TABLE IF EXISTS user_wallets;
+DROP TABLE IF EXISTS user_providers;
+DROP TABLE IF EXISTS users;

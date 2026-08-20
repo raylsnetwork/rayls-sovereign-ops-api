@@ -1,0 +1,6 @@
+.git
+build
+tmp
+vendor
+.venv
+node_modules

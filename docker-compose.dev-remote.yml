@@ -1,0 +1,437 @@
+# Minimal dev stack: a single ops-service instance + playground pointed at a
+# SHARED remote DEV Privacy Node (remote mode), integrated with the local SHARED
+# Blockscout (../rayls-privacy-blockscout). No local PN/axyl, no hub, no
+# relayer/cts/gnark.
+#
+# Databases (ops_api, raylzdb) and the Blockscout DB all live in the shared-db of
+# the `blockscout-shared` external network (created by ../rayls-privacy-blockscout/
+# scripts/start-shared.sh). start_dev.sh brings the shared infra + the PN instance
+# up and exports the values consumed here via interpolation:
+#   PN_RPC_URL, PN_RPC_URL_CONTAINER, PN_CHAIN_ID, DEPLOYMENT_PROXY_REGISTRY_ADDR,
+#   BLOCKCHAIN_STARTING_BLOCK, BLOCKSCOUT_DB_CONN, PN_EXTRA_HOST
+#
+# TWO RPC URLs, because the chain is reached from two places:
+#   PN_RPC_URL            — the HOST form. Used by start_dev.sh's own curl / cast /
+#                           hardhat calls, which run on the host.
+#   PN_RPC_URL_CONTAINER  — the form reachable from INSIDE a container. Used by every
+#                           service here: ops-api, worker, custody AND the playground
+#                           (whose NEXT_PUBLIC_CHAIN_RPC_URL is dereferenced SERVER-side
+#                           by its /api/rpc/<chainId> route — the browser only ever calls
+#                           that relative path, never the chain directly).
+# For a remote PN (--pn / --deploy-public-test) both are the same public hostname, so
+# PN_RPC_URL_CONTAINER just defaults to PN_RPC_URL. They diverge only in --rayup mode,
+# where the chain is a NodePort on the local k3d cluster: the host reaches it at
+# localhost:<port>, but inside a container "localhost" is the container itself — so
+# there it becomes host.docker.internal:<port>.
+#
+# Run via: ./start_dev.sh (do not invoke `docker compose` directly — interpolated
+# vars come from the script's environment, and the shared infra must be up first).
+
+networks:
+  default:
+  blockscout-shared:
+    external: true
+    name: blockscout-shared
+
+services:
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"  # client
+      - "8222:8222"  # monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Idempotently creates ops_api + raylzdb in the shared Blockscout postgres before
+  # other services start.
+  db-init:
+    image: postgres:17
+    networks:
+      - blockscout-shared
+    environment:
+      PGPASSWORD: dev-only-not-a-secret
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        until pg_isready -h shared-db -U blockscout; do echo "waiting for shared-db..."; sleep 2; done &&
+        (createdb -h shared-db -U blockscout ops_api 2>/dev/null && echo "created ops_api" || echo "ops_api already exists") &&
+        (createdb -h shared-db -U blockscout raylzdb 2>/dev/null && echo "created raylzdb" || echo "raylzdb already exists") &&
+        (createdb -h shared-db -U blockscout ops_identity 2>/dev/null && echo "created ops_identity" || echo "ops_identity already exists")
+    restart: "no"
+
+  # The SHARED, chain-bound ops-api — only for the modes that boot bound to one chain
+  # (--pn, --deploy-public-test, plain). NOT started in --rayup: there every chain gets its
+  # own ops-api from RayUp (helm release ops-<slug>, database ops_api_<slug>), created and
+  # destroyed with the chain. Running this one there is what let a second user's requests
+  # be served by the first user's chain.
+  ops-api:
+    profiles: ["bound-chain"]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+      - "2345:2345" # Delve remote debugger
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_PTRACE
+    volumes:
+      - .:/app
+      - go_modules:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    environment:
+      LOGGING: development
+      RAYLS_MODE: privacy_node
+      # Start with no chain bound (set by start_dev.sh --rayup, where the chain is created
+      # later from the playground UI). Empty/false in every other mode.
+      CHAINLESS: "${CHAINLESS:-}"
+      BASE_URL: http://localhost:8080
+      CORSURLS: "http://localhost:3000;http://localhost:8080"
+      POST_LOGIN_REDIRECT_URL: http://localhost:3000
+      # The OAuth provider callback must land on the PLAYGROUND origin, not :8080, so the
+      # JWT cookie the callback sets is first-party to :3000 (where the app + /api/tokens
+      # proxy live). The playground rewrites /auth/* back to ops-api, so the browser only
+      # ever sees :3000. Register http://localhost:3000/auth/<provider>/callback with the
+      # Google/Microsoft app. Without this the cookie lands on :8080 and deploy 401s.
+      OAUTH_REDIRECT_BASE: http://localhost:3000
+      JWT_SECRET: dev-secret-do-not-use-in-prod
+      # Chain-scoped data only (am_*, tokens, balances, cursors). OPS_DB_NAME is rewritten
+      # per chain by start_dev.sh's rebind so each chain keeps its own database.
+      DATABASE_CONNECTIONSTRING: "host=shared-db port=5432 user=blockscout password=dev-only-not-a-secret dbname=${OPS_DB_NAME:-ops_api} sslmode=disable"
+      # Accounts (users + the one custody wallet each) come from the shared identity DB.
+      IDENTITY_DB_CONN: "host=shared-db port=5432 user=blockscout password=dev-only-not-a-secret dbname=ops_identity sslmode=disable"
+      CUSTODY_RAYLS_HSM_URL: "http://custody:5000"
+      # Must match the custody service's AUTH_API_KEY below.
+      CUSTODY_RAYLS_HSM_API_KEY: dev-only-custody-api-key
+      CUSTODY_RAYLS_HSM_PASSWORD: dev-password
+      # OAuth login (loaded from .env.oauth by start_dev.sh; blank disables it — SIWE still works).
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      MICROSOFT_CLIENT_ID: "${MICROSOFT_CLIENT_ID:-}"
+      MICROSOFT_CLIENT_SECRET: "${MICROSOFT_CLIENT_SECRET:-}"
+      NATS_URL: "nats://nats:4222"
+      # Container-reachable RPC (see the header): same as PN_RPC_URL for a remote PN.
+      PN_RPC_URL: "${PN_RPC_URL_CONTAINER:-${PN_RPC_URL}}"
+      BLOCKCHAIN_RPC_URL: "${PN_RPC_URL_CONTAINER:-${PN_RPC_URL}}"
+      DEPLOYMENT_PROXY_REGISTRY_ADDR: "${DEPLOYMENT_PROXY_REGISTRY_ADDR}"
+      # DEV-ONLY: faucet key to auto-fund new custody wallets for gas on the non-gasless
+      # public chain. start_dev.sh exports it ONLY in --deploy-public-test mode; empty
+      # (and thus disabled) on gasless Privacy Nodes.
+      BLOCKCHAIN_FAUCET_PRIVATE_KEY: "${BLOCKCHAIN_FAUCET_PRIVATE_KEY:-}"
+      # DEV-ONLY: signs the on-chain grantRole that gives each new custody wallet the
+      # FACTORY_DEPLOYER role, so login → token deploy works end-to-end without an
+      # out-of-band grant. Defaults to PRIVATE_KEY_SYSTEM (the contract deployer, which
+      # holds ADMIN authority over FACTORY_DEPLOYER); empty disables auto-granting.
+      BLOCKCHAIN_ROLE_GRANTOR_PRIVATE_KEY: "${BLOCKCHAIN_ROLE_GRANTOR_PRIVATE_KEY:-${PRIVATE_KEY_SYSTEM:-}}"
+      # Chain this instance indexes — stamped as issuerId on indexer-discovered tokens.
+      BLOCKCHAIN_CHAIN_ID: "${PN_CHAIN_ID}"
+      # Start AccessManager indexing at the contract-deploy block (set by start_dev.sh)
+      # instead of block 0 — avoids scanning the whole remote PN history.
+      BLOCKCHAIN_STARTING_BLOCK: "${BLOCKCHAIN_STARTING_BLOCK:-0}"
+      # Shared Blockscout DB for the targeted PN (set by start_dev.sh).
+      BLOCKSCOUT_DB_CONN: "${BLOCKSCOUT_DB_CONN:-}"
+    extra_hosts:
+      # --rayup mode: the chain is a NodePort published on the HOST by k3d, reached
+      # from in here via the gateway. Inert in the remote-PN modes.
+      - "host.docker.internal:host-gateway"
+      - "${PN_EXTRA_HOST:-placeholder.invalid:0.0.0.0}"
+    networks:
+      - default
+      - blockscout-shared
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      custody:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  # The SHARED identity service: login (SIWE, OAuth, email), the user record and session
+  # JWTs, for EVERY chain. Separate from ops-api because ops-api is now per-chain — each
+  # chain gets its own instance with its own database — while a person is the same person
+  # on all of them.
+  #
+  # Its token is identity-only (no roles, no wallet): those are per-chain facts, resolved
+  # by each chain's ops-api from its own AccessManager tables on each request.
+  #
+  # Reuses Dockerfile.worker.dev (same binary, different subcommand) with air for reload.
+  identity:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker.dev
+    command: ["air", "-c", "air.identity.toml"]
+    ports:
+      - "8090:8090"
+    volumes:
+      - .:/app
+      - go_modules:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    environment:
+      LOGGING: development
+      RAYLS_MODE: privacy_node
+      # No chain, ever: this service authenticates people, it does not touch a chain.
+      CHAINLESS: "true"
+      IDENTITY_PORT: "8090"
+      BASE_URL: http://localhost:8090
+      CORSURLS: "http://localhost:3000;http://localhost:8090"
+      POST_LOGIN_REDIRECT_URL: http://localhost:3000
+      # OAuth callbacks land on the PLAYGROUND origin so the session cookie is first-party
+      # to :3000; the playground relays the callback on to whichever service started the
+      # flow (src/app/auth/[provider]/callback). Register
+      # http://localhost:3000/auth/google/callback with the Google app.
+      OAUTH_REDIRECT_BASE: http://localhost:3000
+      # MUST match every ops-api's JWT_SECRET: they verify what this service signs.
+      JWT_SECRET: dev-secret-do-not-use-in-prod
+      # Its OWN database — identity tables only (migrations-identity/).
+      DATABASE_CONNECTIONSTRING: "host=shared-db port=5432 user=blockscout password=dev-only-not-a-secret dbname=ops_identity sslmode=disable"
+      # Mints the bootstrapped admin's wallet. Custody is chain-agnostic (it is told
+      # neither a chain id nor an RPC), so it is safe to share.
+      CUSTODY_RAYLS_HSM_URL: "http://custody:5000"
+      CUSTODY_RAYLS_HSM_API_KEY: dev-only-custody-api-key
+      CUSTODY_RAYLS_HSM_PASSWORD: dev-password
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      MICROSOFT_CLIENT_ID: "${MICROSOFT_CLIENT_ID:-}"
+      MICROSOFT_CLIENT_SECRET: "${MICROSOFT_CLIENT_SECRET:-}"
+      OPS_ADMIN_EMAIL: "${OPS_ADMIN_EMAIL:-}"
+      # Standalone email login. This compose file is the LOCAL dev stack (it builds from
+      # bind-mounted source and ships hardcoded dev secrets), so it is on by default here —
+      # a laptop should not need Google credentials to sign in.
+      #
+      # It issues a session from an UNVERIFIED address: whoever submits an email becomes
+      # that user, including the admin, on every chain the shared identity service backs.
+      # That is only acceptable because this stack is not reachable off the host. Never
+      # copy this default into a deployed environment; set EMAIL_SIGNUP_ENABLED=false there
+      # (and see the TODO in cmd/api/auth/email_signup_handler.go about the code step).
+      EMAIL_SIGNUP_ENABLED: "${EMAIL_SIGNUP_ENABLED:-true}"
+      # Guards /admin/bootstrap (which creates the first admin). Empty = unauthenticated,
+      # acceptable only because the port is not exposed beyond this host.
+      BOOTSTRAP_TOKEN: "${BOOTSTRAP_TOKEN:-}"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8090/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 40s
+    networks:
+      - default
+      - blockscout-shared
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      custody:
+        condition: service_healthy
+
+  # The shared indexers (Blockscout tokens/balances, AccessManager) for the chain-bound
+  # modes. Like ops-api, NOT started in --rayup: each chain's own stack indexes that chain
+  # into that chain's own database.
+  worker:
+    profiles: ["bound-chain"]
+    build:
+      context: .
+      dockerfile: Dockerfile.worker.dev
+    volumes:
+      - .:/app
+      - go_modules:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    environment:
+      LOGGING: development
+      RAYLS_MODE: privacy_node
+      # See the ops-api service: chain-less boot for the --rayup flow.
+      CHAINLESS: "${CHAINLESS:-}"
+      BASE_URL: http://localhost:8080
+      JWT_SECRET: dev-secret-do-not-use-in-prod
+      # Same per-chain database as the API (see OPS_DB_NAME above) — the indexers write the
+      # am_*/token/balance mirrors this chain's API reads.
+      DATABASE_CONNECTIONSTRING: "host=shared-db port=5432 user=blockscout password=dev-only-not-a-secret dbname=${OPS_DB_NAME:-ops_api} sslmode=disable"
+      # The balance indexer filters on known wallets, which live in identity.
+      IDENTITY_DB_CONN: "host=shared-db port=5432 user=blockscout password=dev-only-not-a-secret dbname=ops_identity sslmode=disable"
+      NATS_URL: "nats://nats:4222"
+      # Container-reachable RPC (see the header): same as PN_RPC_URL for a remote PN.
+      PN_RPC_URL: "${PN_RPC_URL_CONTAINER:-${PN_RPC_URL}}"
+      BLOCKCHAIN_RPC_URL: "${PN_RPC_URL_CONTAINER:-${PN_RPC_URL}}"
+      DEPLOYMENT_PROXY_REGISTRY_ADDR: "${DEPLOYMENT_PROXY_REGISTRY_ADDR}"
+      # Chain this instance indexes — stamped as issuerId on indexer-discovered tokens.
+      BLOCKCHAIN_CHAIN_ID: "${PN_CHAIN_ID}"
+      BLOCKCHAIN_STARTING_BLOCK: "${BLOCKCHAIN_STARTING_BLOCK:-0}"
+      BLOCKSCOUT_DB_CONN: "${BLOCKSCOUT_DB_CONN:-}"
+    extra_hosts:
+      # --rayup mode: the chain is a NodePort published on the HOST by k3d, reached
+      # from in here via the gateway. Inert in the remote-PN modes.
+      - "host.docker.internal:host-gateway"
+      - "${PN_EXTRA_HOST:-placeholder.invalid:0.0.0.0}"
+    networks:
+      - default
+      - blockscout-shared
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+
+  custody:
+    build:
+      context: ../rayls-privacy-custody-light
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5032:5000"
+    volumes:
+      - ../rayls-privacy-custody-light:/app
+      - nuget_cache:/root/.nuget/packages
+      - dotnet_obj_cache:/app/src/Rayls.Custody.HSM.API/obj
+    environment:
+      ASPNETCORE_ENVIRONMENT: LOC
+      MACHINE: DEBUG
+      POSTGRESQL_SERVER: shared-db
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_USERNAME: blockscout
+      POSTGRESQL_PASSWORD: dev-only-not-a-secret
+      POSTGRESQL_DBNAME: raylzdb
+      AUTH_API_KEY: dev-only-custody-api-key
+      AUTH_JWT_SECRET: dev-only-not-a-secret-32byte-min
+      EVM_JSON_RPC_CHAIN_ID: "${PN_CHAIN_ID}"
+      # Container-reachable RPC (see the header): same as PN_RPC_URL for a remote PN.
+      EVM_JSON_RPC: "${PN_RPC_URL_CONTAINER:-${PN_RPC_URL}}"
+      USES_AWS: "false"
+      KMS_MAX_WALLETS: 200
+      KEYSTORE_MAX_WALLETS: 20
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    extra_hosts:
+      # --rayup mode: the chain is a NodePort published on the HOST by k3d, reached
+      # from in here via the gateway. Inert in the remote-PN modes.
+      - "host.docker.internal:host-gateway"
+      - "${PN_EXTRA_HOST:-placeholder.invalid:0.0.0.0}"
+    networks:
+      - default
+      - blockscout-shared
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        dotnet restore src/Rayls.Custody.HSM.API/Rayls.Custody.HSM.API.csproj
+        while true; do
+          dotnet run \
+            --project src/Rayls.Custody.HSM.API/Rayls.Custody.HSM.API.csproj \
+            --no-launch-profile \
+            --urls "http://+:5000"
+          echo "Custody app exited, restarting in 5s..."
+          sleep 5
+        done
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  # Next.js dApp bound to the same remote PN + this ops-service instance.
+  # Enabled only with the "playground" profile (start_dev.sh sets it unless
+  # --no-playground is passed).
+  playground:
+    profiles: ["playground"]
+    # Dev image = node:20-bookworm-slim (glibc — Next 16's SWC SIGBUSes on musl)
+    # with python3/make/g++ baked in, so the runtime `npm install` builds the
+    # native addons (bufferutil, utf-8-validate) in a single clean pass. See
+    # rayls-privacy-playground/Dockerfile.dev for why a runtime apt-install +
+    # retry must be avoided (corrupt partial node_modules → napi-postinstall EACCES).
+    build:
+      context: ../rayls-privacy-playground
+      dockerfile: Dockerfile.dev
+    working_dir: /app
+    command: ["sh", "-c", "npm install --no-audit --no-fund && npm run dev"]
+    user: "0:0"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../rayls-privacy-playground:/app
+      - playground_modules:/app/node_modules
+      # Which RayUp chain the user opened ("Open chain dashboard"). Its own volume so it
+      # survives a container recreate — otherwise every rebuild silently unbinds the
+      # dashboard and drops you back to the chain picker. Not in /app: that is the source
+      # bind mount, and this is runtime state, not code.
+      - playground_state:/state
+      - playground_next:/app/.next
+    environment:
+      WATCHPACK_POLLING: "true"
+      NEXT_PUBLIC_CHAIN_ID: "${PN_CHAIN_ID}"
+      NEXT_PUBLIC_CHAIN_NAME: "${CHAIN_DISPLAY_NAME:-Privacy Node (dev)}"
+      # Container form: the browser never calls the chain directly — wagmi's transport
+      # is the relative path /api/rpc/<chainId> (see src/lib/wagmi.ts), and that Next
+      # route handler dereferences this URL SERVER-side, i.e. from inside this container.
+      NEXT_PUBLIC_CHAIN_RPC_URL: "${PN_RPC_URL_CONTAINER:-${PN_RPC_URL}}"
+      NEXT_PUBLIC_CHAIN_REGISTRY_ADDRESS: "${DEPLOYMENT_PROXY_REGISTRY_ADDR}"
+      NEXT_PUBLIC_CHAIN_IS_HUB: "false"
+      NEXT_PUBLIC_OPS_SERVICE_URL: http://localhost:8080
+      # The local Blockscout for THIS chain, published on the host (start_dev.sh derives the
+      # port per mode: pn-a..pn-f 8480+, public-test 8460). Browser-facing, hence localhost.
+      # Empty in --rayup, where each chain reports its own explorerUrl from the control plane.
+      NEXT_PUBLIC_EXPLORER_URL: "${NEXT_PUBLIC_EXPLORER_URL:-}"
+      # Browser-reachable form of the chain RPC (the var above it is the container form).
+      NEXT_PUBLIC_CHAIN_RPC_URL_PUBLIC: "${NEXT_PUBLIC_CHAIN_RPC_URL_PUBLIC:-}"
+      OPS_SERVICE_INTERNAL_URL: http://ops-api:8080
+      # Auth goes to the SHARED identity service, not to any one chain's ops-api: a person
+      # is the same person on every chain. The /auth/* rewrite and the server-side session
+      # lookup (rayup-auth.ts) both use this.
+      IDENTITY_SERVICE_INTERNAL_URL: http://identity:8090
+      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: "${WALLETCONNECT_PROJECT_ID:-}"
+      # RayUp control plane (set only by start_dev.sh --rayup). Dereferenced
+      # SERVER-side by the /api/rayup/* proxy route; empty in the other modes,
+      # which makes the instance UI fall back to its localStorage mock. The
+      # token never reaches the browser.
+      RAYUP_API_URL: "${RAYUP_API_URL_PLAYGROUND:-}"
+      RAYUP_API_TOKEN: "${RAYUP_API_TOKEN:-}"
+      # Per-user scoping: when set, the proxy resolves the caller's ops-api email and
+      # forwards it to RayUp so each account sees only its own chains (RAYUP_API_TOKEN
+      # is the shared-admin fallback, used only for the cookieless start_dev handshake).
+      # Must match the control plane's RAYUP_SERVICE_TOKEN. See lib/rayup-auth.ts.
+      RAYUP_SERVICE_TOKEN: "${RAYUP_SERVICE_TOKEN:-}"
+    extra_hosts:
+      # NEW: the playground had no extra_hosts before --rayup. It needs them now because
+      # in --rayup mode the chain is a NodePort published on the HOST by k3d, so the RPC
+      # proxy (server-side, in here) can only reach it via the gateway.
+      #
+      # Both entries are inert in the remote-PN modes, and deliberately so:
+      #   - host.docker.internal is simply never looked up, because there
+      #     PN_RPC_URL_CONTAINER is a real public hostname.
+      #   - PN_EXTRA_HOST (set only on Linux --pn, to pin the PN's VPN address) does get
+      #     added to /etc/hosts here, which it wasn't before. Safe: it pins the SAME
+      #     address the host resolves the PN to, so the proxy's DNS answer is unchanged —
+      #     it just no longer depends on the container inheriting the host's resolver.
+      - "host.docker.internal:host-gateway"
+      - "${PN_EXTRA_HOST:-placeholder.invalid:0.0.0.0}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+    depends_on:
+      # Login is served by identity; without it the app loads but nobody can sign in.
+      # There is deliberately no ops-api dependency: ops is per-chain, provisioned with the
+      # chain by RayUp, so there is no shared ops-api for the playground to wait on.
+      identity:
+        condition: service_healthy
+
+volumes:
+  go_modules:
+  go_build_cache:
+  nuget_cache:
+  dotnet_obj_cache:
+  playground_modules:
+  playground_next:
+  playground_state:

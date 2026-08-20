@@ -1,0 +1,131 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ops_api
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"  # client
+      - "8222:8222"  # monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ops-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+      - "2345:2345" # Delve remote debugger
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_PTRACE
+    volumes:
+      - .:/app
+      - go_modules:/go/pkg/mod
+    env_file:
+      - ./config/.env
+    environment:
+      DATABASE_CONNECTIONSTRING: "host=postgres port=5432 user=postgres password=postgres dbname=ops_api sslmode=disable"
+      CUSTODY_RAYLS_HSM_URL: "http://custody:5000"
+      NATS_URL: "nats://nats:4222"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      custody:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker.dev
+    volumes:
+      - .:/app
+      - go_modules:/go/pkg/mod
+    env_file:
+      - ./config/.env
+    environment:
+      DATABASE_CONNECTIONSTRING: "host=postgres port=5432 user=postgres password=postgres dbname=ops_api sslmode=disable"
+      CUSTODY_RAYLS_HSM_URL: "http://custody:5000"
+      NATS_URL: "nats://nats:4222"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  custody:
+    build:
+      context: ../rayls-privacy-custody-light
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5032:5000"
+    volumes:
+      - ../rayls-privacy-custody-light:/app
+      - nuget_cache:/root/.nuget/packages
+      - dotnet_obj_cache:/app/src/Rayls.Custody.HSM.API/obj
+    environment:
+      ASPNETCORE_ENVIRONMENT: LOC
+      MACHINE: DEBUG
+      POSTGRESQL_SERVER: postgres
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_USERNAME: postgres
+      POSTGRESQL_PASSWORD: postgres
+      POSTGRESQL_DBNAME: raylzdb
+      AUTH_API_KEY: dev-only-custody-api-key
+      AUTH_JWT_SECRET: dev-only-not-a-secret-32byte-min
+      EVM_JSON_RPC_CHAIN_ID: 600001
+      EVM_JSON_RPC: http://host.docker.internal:8545
+      USES_AWS: "false"
+      KMS_MAX_WALLETS: 200
+      KEYSTORE_MAX_WALLETS: 20
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        dotnet restore src/Rayls.Custody.HSM.API/Rayls.Custody.HSM.API.csproj
+        while true; do
+          dotnet run \
+            --project src/Rayls.Custody.HSM.API/Rayls.Custody.HSM.API.csproj \
+            --no-launch-profile \
+            --urls "http://+:5000"
+          echo "Custody app exited, restarting in 5s..."
+          sleep 5
+        done
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+volumes:
+  postgres_data:
+  go_modules:
+  nuget_cache:
+  dotnet_obj_cache:

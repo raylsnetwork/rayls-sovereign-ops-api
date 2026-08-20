@@ -1,0 +1,77 @@
+# =============================================================================
+# Ops API — Manual build & push to ECR
+# =============================================================================
+# Dispatched by hand from any ref. Builds the service image (one image — the
+# binary carries both the `run` and `worker` subcommands) and pushes it to the
+# private ECR repo below. The tag defaults to the short commit SHA of the ref
+# the workflow was dispatched from; pass `image_tag` to override.
+#
+# NOTHING IS DEPLOYED HERE — this only publishes an image. Tag-based releases
+# with a scan gate remain in release.yml; deploys remain in promote.yml.
+# =============================================================================
+
+name: Build & Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag (defaults to the short commit SHA)"
+        required: false
+        type: string
+
+env:
+  AWS_REGION: us-east-2
+  ECR_REGISTRY: 047719640902.dkr.ecr.us-east-2.amazonaws.com
+  IMAGE_NAME: rayls-privacy-ops-api
+  DOCKERFILE: Dockerfile
+
+jobs:
+  build-and-push:
+    name: Build and Push to ECR
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write # OIDC → ECR push
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Resolve image tag
+        id: meta
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG=$(git rev-parse --short HEAD)
+          fi
+          echo "version=$TAG" >> $GITHUB_OUTPUT
+          echo "Building image with tag: $TAG"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+
+      - name: Build and push to ECR
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: ./${{ env.DOCKERFILE }}
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "## Image published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY

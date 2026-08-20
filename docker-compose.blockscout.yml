@@ -1,0 +1,154 @@
+# Standalone dev compose for running alongside Blockscout's shared infrastructure.
+#
+# Prerequisites: start-shared.sh must already be running in rayls-privacy-blockscout.
+#   cd ../rayls-privacy-blockscout && ./scripts/start-shared.sh
+#
+# Usage:
+#   docker compose -f docker-compose.blockscout.yml up --build
+
+networks:
+  blockscout-shared:
+    external: true
+    name: blockscout-shared
+
+services:
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  nui:
+    image: ghcr.io/nats-nui/nui:latest
+    command: ["--nats-cli-contexts", "/nats-contexts"]
+    ports:
+      - "31311:31311"
+    environment:
+      NATS_URL: "nats://nats:4222"
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  # Idempotently creates ops_api and raylzdb in shared-db before other services start.
+  db-init:
+    image: postgres:17
+    networks:
+      - blockscout-shared
+    environment:
+      PGPASSWORD: dev-only-not-a-secret
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        until pg_isready -h shared-db -U blockscout; do echo "waiting for shared-db..."; sleep 2; done &&
+        (createdb -h shared-db -U blockscout ops_api  2>/dev/null && echo "created ops_api"  || echo "ops_api already exists") &&
+        (createdb -h shared-db -U blockscout raylzdb  2>/dev/null && echo "created raylzdb" || echo "raylzdb already exists")
+    restart: "no"
+
+  ops-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+      - "2345:2345" # Delve remote debugger
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_PTRACE
+    volumes:
+      - .:/app
+      - go_modules:/go/pkg/mod
+    env_file:
+      - ./config/.env
+    environment:
+      DATABASE_CONNECTIONSTRING: "host=host.docker.internal port=7432 user=blockscout password=dev-only-not-a-secret dbname=ops_api sslmode=disable"
+      BLOCKSCOUT_DB_CONN: "host=host.docker.internal port=7432 user=blockscout password=dev-only-not-a-secret dbname=blockscout_node-0 sslmode=disable"
+      CUSTODY_RAYLS_HSM_URL: "http://custody:5000"
+      NATS_URL: "nats://nats:4222"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      custody:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker.dev
+    volumes:
+      - .:/app
+      - go_modules:/go/pkg/mod
+    env_file:
+      - ./config/.env
+    environment:
+      DATABASE_CONNECTIONSTRING: "host=host.docker.internal port=7432 user=blockscout password=dev-only-not-a-secret dbname=ops_api sslmode=disable"
+      BLOCKSCOUT_DB_CONN: "host=host.docker.internal port=7432 user=blockscout password=dev-only-not-a-secret dbname=blockscout_node-0 sslmode=disable"
+      NATS_URL: "nats://nats:4222"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+
+  custody:
+    build:
+      context: ../rayls-privacy-custody-light
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5032:5000"
+    volumes:
+      - ../rayls-privacy-custody-light:/app
+      - nuget_cache:/root/.nuget/packages
+      - dotnet_obj_cache:/app/src/Rayls.Custody.HSM.API/obj
+    environment:
+      ASPNETCORE_ENVIRONMENT: LOC
+      MACHINE: DEBUG
+      POSTGRESQL_SERVER: host.docker.internal
+      POSTGRESQL_PORT: 7432
+      POSTGRESQL_USERNAME: blockscout
+      POSTGRESQL_PASSWORD: dev-only-not-a-secret
+      POSTGRESQL_DBNAME: raylzdb
+      AUTH_API_KEY: dev-only-custody-api-key
+      AUTH_JWT_SECRET: dev-only-not-a-secret-32byte-min
+      EVM_JSON_RPC_CHAIN_ID: 600001
+      EVM_JSON_RPC: http://host.docker.internal:8545
+      USES_AWS: "false"
+      KMS_MAX_WALLETS: 200
+      KEYSTORE_MAX_WALLETS: 20
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        dotnet restore src/Rayls.Custody.HSM.API/Rayls.Custody.HSM.API.csproj
+        while true; do
+          dotnet run \
+            --project src/Rayls.Custody.HSM.API/Rayls.Custody.HSM.API.csproj \
+            --no-launch-profile \
+            --urls "http://+:5000"
+          echo "Custody app exited, restarting in 5s..."
+          sleep 5
+        done
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+volumes:
+  go_modules:
+  nuget_cache:
+  dotnet_obj_cache:

@@ -1,0 +1,50 @@
+# =============================================================================
+# Ops API — Release on a git tag — thin caller
+# =============================================================================
+# Pushing a `v*` tag builds the image and pushes it to ECR under that tag.
+# Versions are chosen by hand:
+#
+#     git tag v1.3.0 && git push origin v1.3.0
+#
+# Only the API image is built. The `worker` subcommand of this same binary has
+# no pipeline and no deploy target — Dockerfile.worker still exists for local
+# use, but nothing publishes it.
+#
+# NOTHING IS DEPLOYED HERE. Deploying is api-promote.yml, dispatched manually,
+# once per environment — testnet and mainnet are the same act.
+#
+# A version is spent: ECR tags are IMMUTABLE, so a blocked scan gate is fixed
+# by fixing the finding and cutting a NEW tag, never by re-pushing this one.
+#
+# Replaces the previous build-api.yml (same trigger, no scan gate before
+# push). Same flow as rayls-privacy-custody-light.
+# =============================================================================
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  id-token: write # OIDC → ECR push
+  contents: read
+  security-events: write # Trivy → Security tab
+
+jobs:
+  release:
+    uses: raylsnetwork/rayls-public-github-workflows/.github/workflows/release-container.yml@main
+    with:
+      app_name: rayls-ops-api
+      image_name: rayls-ops-api
+      dockerfile: Dockerfile
+      # Releases can be cut from any branch, not just main (the default is
+      # true, which rejects a tag that doesn't descend from main).
+      #
+      # KNOW WHAT IT COSTS: tags bypass branch protection, so with this off
+      # anyone with write access can publish an image built from a ref that
+      # was never reviewed. The tag itself is the only audit trail — cut them
+      # from a ref you would be willing to merge.
+      require_main: false
+    # No gitops inputs and no secrets: the release path builds, scans and pushes
+    # to ECR — it never deploys.

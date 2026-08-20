@@ -1,0 +1,52 @@
+# =============================================================================
+# Ops API — Promote a version to an environment — thin caller
+# =============================================================================
+# Deploys a version api-release.yml ALREADY pushed to ECR. Never builds: the
+# run fails if the version isn't in the `rayls-ops-api` repo, so what reaches
+# mainnet is the exact artifact that was built and scanned at tag time.
+#
+# testnet and mainnet are the same act — only `environment` differs. mainnet's
+# GitOps PR is NOT auto-merged: a human merges it, and that merge is the
+# production gate. mainnet also gets a second Trivy pass before the PR opens,
+# since time may have passed since the image was built.
+#
+# You pass a VERSION (`v3.0.1`), never an image tag.
+# =============================================================================
+
+name: Promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options: [testnet, mainnet]
+      version:
+        description: "Version to deploy (e.g. v3.0.1) — must already exist in ECR"
+        required: true
+        type: string
+
+permissions:
+  id-token: write # OIDC → ECR lookup
+  contents: read
+
+jobs:
+  promote:
+    uses: raylsnetwork/rayls-public-github-workflows/.github/workflows/promote-container.yml@main
+    with:
+      app_name: rayls-ops-api
+      # ECR repo — same one api-release.yml pushes to.
+      image_name: rayls-ops-api
+      # The GitOps app directory does NOT match the ECR repo name: the image is
+      # `rayls-ops-api`, the app lives at apps/rayls-privacy-ops-api/ in
+      # rayls-public-gitops. Without this the default (app_name) would look for
+      # apps/rayls-ops-api/ and fail with "Values file not found".
+      gitops_app: rayls-privacy-ops-api
+      # Field pinned in apps/rayls-privacy-ops-api/chart/values/<env>.yaml.
+      value_path: image.tag
+      environment: ${{ inputs.environment }}
+      version: ${{ inputs.version }}
+    secrets:
+      GITOPS_REPO_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}

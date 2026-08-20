@@ -1,0 +1,3 @@
+ALTER TABLE tokens
+    ADD COLUMN IF NOT EXISTS total_supply TEXT        NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS holder_count  INTEGER     NOT NULL DEFAULT 0;

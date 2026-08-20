@@ -1,0 +1,41 @@
+# =============================================================================
+# Ops API — CI (branch) — thin caller
+# =============================================================================
+# Runs on every push to any branch except main, so build and scan failures show
+# up while the code is being written. The PR to main here means "ready to
+# release", which is far too late for the first build.
+#
+# main is excluded on purpose: a merge into it was already validated on the
+# branch, and the release path builds and scans again before pushing anything.
+#
+# No path filter: this is one Go module, so any change can affect the image.
+#
+# Only the API image is built. The `worker` subcommand of this same binary has
+# no pipeline — Dockerfile.worker is not built or scanned here.
+#
+# Nothing reaches ECR here — images are pushed only by api-release.yml, on a
+# `v*` tag, and only if the scan gate passes.
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches-ignore: [main]
+
+# Rapid successive pushes on the same branch supersede each other, so a
+# work-in-progress branch doesn't queue up full Go builds.
+concurrency:
+  group: ci-api-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: raylsnetwork/rayls-public-github-workflows/.github/workflows/ci-container.yml@main
+    with:
+      app_name: rayls-ops-api
+      image_name: rayls-ops-api
+      dockerfile: Dockerfile

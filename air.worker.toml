@@ -1,0 +1,25 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/app/ops-worker ./cmd/api/main.go"
+bin = "./tmp/app/ops-worker"
+args_bin = ["worker"]
+include_ext = ["go"]
+exclude_dir = ["build", "tmp", "vendor", "testdata", "cmd/api/docs"]
+delay = 1000
+kill_delay = "0s"
+send_interrupt = true
+rerun = false
+
+[log]
+time = false
+
+[color]
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+
+[misc]
+clean_on_exit = true

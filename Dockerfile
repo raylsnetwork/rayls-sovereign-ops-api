@@ -1,13 +1,22 @@
-FROM golang:1.24-bookworm AS build
+FROM --platform=$BUILDPLATFORM golang:1.24-bookworm AS build
 
 WORKDIR /app
 
+# Dependencies first — this layer is reused until go.mod/go.sum change.
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY . .
 
-RUN go install github.com/swaggo/swag/cmd/swag@latest && \
+# swag pinned to the version in go.mod — @latest made the image unreproducible.
+# Runs on the build platform, so no GOARCH here.
+RUN go install github.com/swaggo/swag/cmd/swag@v1.16.4 && \
     swag init --parseDependency -q -g ./cmd/api/main.go -o ./cmd/api/docs
 
-RUN CGO_ENABLED=0 go build -o ./build/rayls-ops-api ./cmd/api/main.go
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -o ./build/rayls-ops-api ./cmd/api/main.go
 
 FROM scratch
 

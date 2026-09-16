@@ -8,10 +8,10 @@ RUN go mod download
 
 COPY . .
 
-# swag pinned to the version in go.mod — @latest made the image unreproducible.
-# Runs on the build platform, so no GOARCH here.
-RUN go install github.com/swaggo/swag/cmd/swag@v1.16.4 && \
-    swag init --parseDependency -q -g ./cmd/api/main.go -o ./cmd/api/docs
+# swag is a tool dependency, so the version and its checksum come from
+# go.mod/go.sum rather than the command line. Runs on the build platform, so no
+# GOARCH here.
+RUN go tool swag init --parseDependency -q -g ./cmd/api/main.go -o ./cmd/api/docs
 
 ARG TARGETOS
 ARG TARGETARCH
